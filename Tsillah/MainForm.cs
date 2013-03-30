@@ -12,9 +12,10 @@ namespace Tsillah
 {
 	public partial class MainForm : Form
 	{
-		private AutomationFocusChangedEventHandler _focusHandler = null;
-		private AutomationElement _currentElement;
+		private AutomationFocusChangedEventHandler _focusChangedHandler = null;
 		private AutomationEventHandler _textSelectionChangedEventHandler = null;
+		private AutomationEventHandler _textChangedEventHandler = null;
+		private AutomationElement _currentElement = null;
 
 		public MainForm()
 		{
@@ -39,14 +40,17 @@ namespace Tsillah
 
 		public void SubscribeToFocusChange()
 		{
-			_focusHandler = new AutomationFocusChangedEventHandler(OnFocusChange);
-			Automation.AddAutomationFocusChangedEventHandler(_focusHandler);
+			_focusChangedHandler = new AutomationFocusChangedEventHandler(OnFocusChange);
+			Automation.AddAutomationFocusChangedEventHandler(_focusChangedHandler);
 		}
 
 		private void OnFocusChange(object sender, AutomationFocusChangedEventArgs e)
 		{
-			RemoveTextSelectionChangedEventHandler();
-			AddTextSelectionChangedEventHandler();
+			this.RemoveTextSelectionChangedEventHandler();
+			this.AddTextSelectionChangedEventHandler();
+
+			this.RemoveTextChangedEventHandler();
+			this.AddTextChangedEventHandler();
 		}
 
 		private void AddTextSelectionChangedEventHandler()
@@ -69,6 +73,62 @@ namespace Tsillah
 				txtOutput.Text = "(no element)";
 		}
 
+		private void AddTextChangedEventHandler()
+		{
+			_currentElement = AutomationElement.FocusedElement;
+			if (_currentElement != null)
+			{
+				// Limit to VS WPF editors
+				if (_currentElement.Current.AutomationId != "WpfTextView")
+					return;
+
+				_textChangedEventHandler = new AutomationEventHandler(OnTextChanged);
+				Automation.AddAutomationEventHandler(
+					TextPattern.TextChangedEvent,
+					_currentElement,
+					TreeScope.Element,
+					_textChangedEventHandler);
+			}
+			else
+				txtOutput.Text = "(no element)";
+		}
+
+		private void OnTextChanged(object sender, AutomationEventArgs e)
+		{
+			// Make sure the element still exists. Elements such as tooltips
+			// can disappear before the event is processed.
+			AutomationElement element;
+			try
+			{
+				element = sender as AutomationElement;
+			}
+			catch (ElementNotAvailableException)
+			{
+				return;
+			}
+
+			try
+			{
+				var pattern = (TextPattern)element.GetCurrentPattern(TextPatternIdentifiers.Pattern);
+				var ranges = pattern.GetSelection();
+				if (ranges.Length >= 1)
+				{
+					var range = ranges[0];
+					range.ExpandToEnclosingUnit(TextUnit.Character);
+					var rectangles = range.GetBoundingRectangles();
+					if (rectangles.Length >= 1)
+					{
+						var rect = rectangles[0];
+						this.MoveMousePointer((int)rect.X, (int)rect.Y + 10);
+					}
+				}
+			}
+			catch (Exception ex)
+			{
+				txtOutput.Text = ex.Message;
+			}
+		}
+
 		private void RemoveTextSelectionChangedEventHandler()
 		{
 			if (_currentElement != null && _textSelectionChangedEventHandler != null)
@@ -77,6 +137,17 @@ namespace Tsillah
 					TextPattern.TextSelectionChangedEvent,
 					_currentElement,
 					_textSelectionChangedEventHandler);
+			}
+		}
+
+		private void RemoveTextChangedEventHandler()
+		{
+			if (_currentElement != null && _textChangedEventHandler != null)
+			{
+				Automation.RemoveAutomationEventHandler(
+					TextPattern.TextChangedEvent,
+					_currentElement,
+					_textChangedEventHandler);
 			}
 		}
 
@@ -95,7 +166,7 @@ namespace Tsillah
 			{
 				return;
 			}
-			
+
 			try
 			{
 				var pattern = (TextPattern)element.GetCurrentPattern(TextPatternIdentifiers.Pattern);
@@ -120,10 +191,10 @@ namespace Tsillah
 
 		public void UnsubscribeFocusChange()
 		{
-			if (_focusHandler != null)
+			if (_focusChangedHandler != null)
 			{
-				Automation.RemoveAutomationFocusChangedEventHandler(_focusHandler);
-				_focusHandler = null;
+				Automation.RemoveAutomationFocusChangedEventHandler(_focusChangedHandler);
+				_focusChangedHandler = null;
 			}
 		}
 
