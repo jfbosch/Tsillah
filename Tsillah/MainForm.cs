@@ -46,90 +46,54 @@ namespace Tsillah
 
 		private void OnFocusChange(object sender, AutomationFocusChangedEventArgs e)
 		{
-			this.RemoveTextSelectionChangedEventHandler();
+			_currentElement = AutomationElement.FocusedElement;
+			if (_currentElement == null)
+				return;
+
+			// Limit to VS WPF editors
+			if (_currentElement.Current.AutomationId != "WpfTextView")
+				return;
+
+			this.UiFeedback(
+				string.Format("hooking into control {0}, {2} in ProcessId {1}", _currentElement.Current.AutomationId, _currentElement.Current.ProcessId, _currentElement.Current.ControlType.ProgrammaticName));
+
+			this.RemoveTextSelectionChangedEventHandlerIfSet();
 			this.AddTextSelectionChangedEventHandler();
 
-			this.RemoveTextChangedEventHandler();
+			this.RemoveTextChangedEventHandlerIfSet();
 			this.AddTextChangedEventHandler();
 		}
 
 		private void AddTextSelectionChangedEventHandler()
 		{
-			_currentElement = AutomationElement.FocusedElement;
-			if (_currentElement != null)
-			{
-				// Limit to VS WPF editors
-				if (_currentElement.Current.AutomationId != "WpfTextView")
-					return;
-
-				_textSelectionChangedEventHandler = new AutomationEventHandler(OnTextSelectionChanged);
-				Automation.AddAutomationEventHandler(
-					TextPattern.TextSelectionChangedEvent,
-					_currentElement,
-					TreeScope.Element,
-					_textSelectionChangedEventHandler);
-			}
-			else
-				txtOutput.Text = "(no element)";
+			_textSelectionChangedEventHandler = new AutomationEventHandler(TextEventHandler);
+			this.AddEventHandler(TextPattern.TextSelectionChangedEvent, _textSelectionChangedEventHandler);
 		}
 
 		private void AddTextChangedEventHandler()
 		{
+			_textChangedEventHandler = new AutomationEventHandler(TextEventHandler);
+			this.AddEventHandler(TextPattern.TextChangedEvent, _textChangedEventHandler);
+		}
+
+		private void AddEventHandler(
+			AutomationEvent automationEvent,
+			AutomationEventHandler eventHandler)
+		{
 			_currentElement = AutomationElement.FocusedElement;
 			if (_currentElement != null)
 			{
-				// Limit to VS WPF editors
-				if (_currentElement.Current.AutomationId != "WpfTextView")
-					return;
-
-				_textChangedEventHandler = new AutomationEventHandler(OnTextChanged);
 				Automation.AddAutomationEventHandler(
-					TextPattern.TextChangedEvent,
+					automationEvent,
 					_currentElement,
 					TreeScope.Element,
-					_textChangedEventHandler);
+					eventHandler);
 			}
 			else
-				txtOutput.Text = "(no element)";
+				this.UiFeedback("(no element)");
 		}
 
-		private void OnTextChanged(object sender, AutomationEventArgs e)
-		{
-			// Make sure the element still exists. Elements such as tooltips
-			// can disappear before the event is processed.
-			AutomationElement element;
-			try
-			{
-				element = sender as AutomationElement;
-			}
-			catch (ElementNotAvailableException)
-			{
-				return;
-			}
-
-			try
-			{
-				var pattern = (TextPattern)element.GetCurrentPattern(TextPatternIdentifiers.Pattern);
-				var ranges = pattern.GetSelection();
-				if (ranges.Length >= 1)
-				{
-					var range = ranges[0];
-					range.ExpandToEnclosingUnit(TextUnit.Character);
-					var rectangles = range.GetBoundingRectangles();
-					if (rectangles.Length >= 1)
-					{
-						var rect = rectangles[0];
-						this.MoveMousePointer((int)rect.X, (int)rect.Y + 10);
-					}
-				}
-			}
-			catch (Exception ex)
-			{
-				txtOutput.Text = ex.Message;
-			}
-		}
-
-		private void RemoveTextSelectionChangedEventHandler()
+		private void RemoveTextSelectionChangedEventHandlerIfSet()
 		{
 			if (_currentElement != null && _textSelectionChangedEventHandler != null)
 			{
@@ -140,7 +104,7 @@ namespace Tsillah
 			}
 		}
 
-		private void RemoveTextChangedEventHandler()
+		private void RemoveTextChangedEventHandlerIfSet()
 		{
 			if (_currentElement != null && _textChangedEventHandler != null)
 			{
@@ -151,7 +115,7 @@ namespace Tsillah
 			}
 		}
 
-		private void OnTextSelectionChanged(object sender, AutomationEventArgs e)
+		private void TextEventHandler(object sender, AutomationEventArgs e)
 		{
 			//if (e.EventId == InvokePattern.InvokedEvent.)
 
@@ -161,31 +125,28 @@ namespace Tsillah
 			try
 			{
 				element = sender as AutomationElement;
+
+				var pattern = (TextPattern)element.GetCurrentPattern(TextPatternIdentifiers.Pattern);
+				var ranges = pattern.GetSelection();
+				if (ranges.Length == 1)
+				{
+					var range = ranges[0].Clone();
+					range.ExpandToEnclosingUnit(TextUnit.Character);
+					var rectangles = range.GetBoundingRectangles();
+					if (rectangles.Length == 1)
+					{
+						var rect = rectangles[0];
+						this.MoveMousePointer(rect);
+					}
+				}
 			}
 			catch (ElementNotAvailableException)
 			{
 				return;
 			}
-
-			try
-			{
-				var pattern = (TextPattern)element.GetCurrentPattern(TextPatternIdentifiers.Pattern);
-				var ranges = pattern.GetSelection();
-				if (ranges.Length >= 1)
-				{
-					var range = ranges[0];
-					range.ExpandToEnclosingUnit(TextUnit.Character);
-					var rectangles = range.GetBoundingRectangles();
-					if (rectangles.Length >= 1)
-					{
-						var rect = rectangles[0];
-						this.MoveMousePointer((int)rect.X, (int)rect.Y + 10);
-					}
-				}
-			}
 			catch (Exception ex)
 			{
-				txtOutput.Text = ex.Message;
+				this.UiFeedback(ex.Message);
 			}
 		}
 
@@ -199,13 +160,39 @@ namespace Tsillah
 		}
 
 		private void MoveMousePointer(
-			int x,
-			int y)
+			System.Windows.Rect rect)
 		{
 			//this.Cursor = new Cursor(Cursor.Current.Handle);
-			Cursor.Position = new Point(x, y);
+
+			var halfCarotHeight = rect.Height / 2;
+			var halfCursorHeight = Cursor.Size.Height / 2;
+			var offset = (int)halfCarotHeight;
+			Cursor.Position = new Point((int)rect.X, (int)rect.Y + offset);
+			
 			// For some reason, Hide() does not hide the mouse cursor.
 			//Cursor.Hide();
+		}
+
+		private void UiFeedback(
+			params string[] info)
+		{
+			MethodInvoker updateUI = delegate()
+			{
+				foreach (string line in info)
+				{
+					txtOutput.Text += line;
+					txtOutput.Text += Environment.NewLine;
+					txtOutput.SelectionStart = txtOutput.TextLength;
+				}
+			};
+			if (this.InvokeRequired)
+			{
+				this.Invoke(updateUI);
+			}
+			else
+			{
+				updateUI();
+			}
 		}
 
 	}
