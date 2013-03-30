@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Windows.Forms;
 
-namespace UIATracer
+namespace Tsillah
 {
 	static class Program
 	{
