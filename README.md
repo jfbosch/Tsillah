@@ -9,8 +9,8 @@ Why
 In short, Accessibility.
 I have been a Visual Studio user since VS 2003. While most developers welcomed the switch to WPF code editors in Visual Studio 2010, I was not one of them. While I am not blind, I cannot see much, and require magnification software and screen readers to work on a computer. I use a package called Zoomtext by AI Squared.  http://www.aisquared.com/zoomtext
 The problem is that Zoomtext does not have the ability to track the WPF text cursor so that the magnified portion of the screen follows the cursor. That is quite a problem as you might well imagine.
-My workaround for the last 3 years has been to use the built in zooming capability of the code editor in Visual Studio. While this is a workable solution, it has several drawbacks
 
+My workaround for the last 3 years has been to use the built in zooming capability of the code editor in Visual Studio. While this is a workable solution, it has several drawbacks
 
 How
 ===
