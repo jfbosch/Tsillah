@@ -23,3 +23,8 @@ How
 
 I used .Net UI Automation: http://msdn.microsoft.com/en-us/library/windows/desktop/ee684009.aspx
 When the program starts up, it registers handlers for window focus changed events across the entire desktop. When it detects that a Visual Studio 2012 WPF text editor has received focus, it registers handlers for text changed and text selection changed events. This allows it to extract the coordinates of the text cursor when it moves as a result of keyboard input, and to reposition the mouse pointer.
+
+The name?
+=========
+
+Tsillah: Hebrew name meaning "shade, shadow." In the bible, this is the name of Lamech's second wife.
